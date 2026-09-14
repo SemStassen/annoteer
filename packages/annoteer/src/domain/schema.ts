@@ -30,7 +30,17 @@ export const CreateAnnotationSchema = Schema.Struct({
   anchor: AnchorSchema,
   body: text(5000),
 });
-export const SessionSchema = Schema.Struct({ token: text(128), name: text(80) });
+export const ReviewAccessSchema = Schema.Struct({ token: text(128) });
+export const SessionSchema = Schema.Struct({
+  token: text(128),
+  name: text(80),
+  password: Schema.optional(
+    Schema.String.pipe(
+      Schema.maxLength(72),
+      Schema.filter((value) => new TextEncoder().encode(value).length <= 72),
+    ),
+  ),
+});
 export const ReplySchema = Schema.Struct({ body: text(5000) });
 export const StatusSchema = Schema.Struct({ status: Schema.Literal("open", "resolved") });
 export const InviteSchema = Schema.Struct({

@@ -42,6 +42,7 @@ export function Annoteer({ endpoint, deployment = "main", nonce }: AnnoteerProps
   const host = useRef<HTMLDivElement | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [invitation, setInvitation] = useState<string | null>(null);
+  const [passwordRequired, setPasswordRequired] = useState<boolean | null>(null);
   const [panel, setPanel] = useState(false);
   const [selecting, setSelecting] = useState(false);
   const [draft, setDraft] = useState<Anchor | null>(null);
@@ -126,6 +127,23 @@ export function Annoteer({ endpoint, deployment = "main", nonce }: AnnoteerProps
       window.removeEventListener("hashchange", onHashChange);
     };
   }, [endpoint, key]);
+  useEffect(() => {
+    setPasswordRequired(null);
+    if (!invitation) return;
+    let cancelled = false;
+    request<{ passwordRequired: boolean }>(endpoint, "/review-access", undefined, {
+      token: invitation,
+    })
+      .then((data) => {
+        if (!cancelled) setPasswordRequired(data.passwordRequired);
+      })
+      .catch((cause: Error) => {
+        if (!cancelled) setError(cause.message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [endpoint, invitation]);
   const refresh = useCallback(async () => {
     if (!session) return;
     const data = await request<Annotation[]>(
@@ -389,6 +407,7 @@ export function Annoteer({ endpoint, deployment = "main", nonce }: AnnoteerProps
                     const next = await request<Session>(endpoint, "/sessions", undefined, {
                       token: invitation,
                       name: data.get("name"),
+                      password: data.get("password") || undefined,
                     });
                     storage.set(key, JSON.stringify(next));
                     storage.remove(`${key}:invite`);
@@ -411,7 +430,19 @@ export function Annoteer({ endpoint, deployment = "main", nonce }: AnnoteerProps
                     autoComplete="name"
                   />
                 </label>
-                <button className="primary" disabled={busy}>
+                {passwordRequired && (
+                  <label>
+                    Review password
+                    <input
+                      name="password"
+                      type="password"
+                      required
+                      maxLength={72}
+                      autoComplete="current-password"
+                    />
+                  </label>
+                )}
+                <button className="primary" disabled={busy || passwordRequired === null}>
                   Start reviewing ↗
                 </button>
                 <p className="muted">

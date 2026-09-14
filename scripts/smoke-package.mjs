@@ -48,6 +48,12 @@ try {
   assert.match(await readFile(join(cwd, ".gitignore"), "utf8"), /\.annoteer/);
   await access(join(cwd, ".annoteer/worker/index.js"));
   await access(join(cwd, ".annoteer/migrations/0001_initial.sql"));
+  await access(join(cwd, ".annoteer/migrations/0002_review_password.sql"));
+  await access(join(cwd, ".annoteer/password.ts"));
+  assert.match(await readFile(join(cwd, "annoteer.jsonc"), "utf8"), /password/);
+  const deploymentPackage = JSON.parse(await readFile(join(cwd, ".annoteer/package.json"), "utf8"));
+  assert.ok(deploymentPackage.dependencies["jsonc-parser"]);
+  assert.ok(deploymentPackage.dependencies.bcryptjs);
   console.log(
     "✓ Packed package installs, renders safely on the server, and scaffolds/resumes from its own shipped assets.",
   );

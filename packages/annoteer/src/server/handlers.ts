@@ -3,6 +3,7 @@ import {
   CreateAnnotationSchema,
   InviteSchema,
   ReplySchema,
+  ReviewAccessSchema,
   SessionSchema,
   StatusSchema,
 } from "../domain/schema";
@@ -10,12 +11,14 @@ import type { Env } from "./env";
 import { attempt, fail } from "./errors";
 import { hash, token } from "./credentials";
 import { json, decode, readBody } from "./http";
+import { passwordVersion, verifyPassword } from "./password";
 
 interface Auth {
   id: string;
   name: string;
   role: "agency" | "client";
   expires_at: number;
+  password_version: string;
 }
 interface AnnotationRow {
   id: string;
@@ -91,6 +94,19 @@ export const route = (request: Request, env: Env) =>
       }
       return yield* Effect.fail(fail(404, "Route not found."));
     }
+    if (url.pathname === "/review-access" && request.method === "POST") {
+      const body = yield* decode(ReviewAccessSchema, yield* readBody(request));
+      const invitation = yield* first<{ role: string }>(
+        "SELECT role FROM invitations WHERE token_hash = ? AND revoked = 0 AND expires_at > ?",
+        yield* hash(body.token),
+        now,
+      );
+      if (!invitation)
+        return yield* Effect.fail(fail(401, "This review link has expired or was revoked."));
+      return json({
+        passwordRequired: invitation.role === "client" && Boolean(env.REVIEW_PASSWORD_HASH),
+      });
+    }
     if (url.pathname === "/sessions" && request.method === "POST") {
       const body = yield* decode(SessionSchema, yield* readBody(request));
       const invitation = yield* first<{ id: string; role: string; expires_at: number }>(
@@ -100,6 +116,26 @@ export const route = (request: Request, env: Env) =>
       );
       if (!invitation)
         return yield* Effect.fail(fail(401, "This review link has expired or was revoked."));
+      if (invitation.role === "client" && env.REVIEW_PASSWORD_HASH) {
+        if (!body.password)
+          return yield* Effect.fail(fail(401, "Enter the review password to continue."));
+        const key = yield* hash(
+          `${invitation.id}:${request.headers.get("CF-Connecting-IP") ?? "unknown"}`,
+        );
+        yield* run("DELETE FROM password_attempts WHERE reset_at <= ?", now);
+        const attempts = yield* first<{ attempts: number }>(
+          "INSERT INTO password_attempts (key, attempts, reset_at) VALUES (?, 1, ?) ON CONFLICT(key) DO UPDATE SET attempts = attempts + 1 RETURNING attempts",
+          key,
+          now + 15 * 60000,
+        );
+        if (!attempts || attempts.attempts > 10)
+          return yield* Effect.fail(
+            fail(429, "Too many password attempts. Try again in 15 minutes."),
+          );
+        if (!(yield* verifyPassword(body.password, env)))
+          return yield* Effect.fail(fail(401, "Incorrect review password. Please try again."));
+      }
+      const version = invitation.role === "client" ? yield* passwordVersion(env) : "";
       const count = yield* first<{ total: number }>(
         "SELECT COUNT(*) AS total FROM sessions WHERE invitation_id = ? AND created_at > ?",
         invitation.id,
@@ -110,25 +146,30 @@ export const route = (request: Request, env: Env) =>
       const secret = token();
       const expiresAt = Math.min(invitation.expires_at, now + 7 * 86400000);
       yield* run(
-        "INSERT INTO sessions (id, token_hash, invitation_id, name, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO sessions (id, token_hash, invitation_id, name, expires_at, created_at, password_version) VALUES (?, ?, ?, ?, ?, ?, ?)",
         crypto.randomUUID(),
         yield* hash(secret),
         invitation.id,
         body.name.trim(),
         expiresAt,
         now,
+        version,
       );
       return json({ token: secret, name: body.name.trim(), role: invitation.role, expiresAt }, 201);
     }
     if (!bearer) return yield* Effect.fail(fail(401, "Open a review invitation to continue."));
     const auth = yield* first<Auth>(
-      "SELECT s.id, s.name, s.expires_at, i.role FROM sessions s JOIN invitations i ON i.id = s.invitation_id WHERE s.token_hash = ? AND s.expires_at > ? AND i.expires_at > ? AND i.revoked = 0",
+      "SELECT s.id, s.name, s.expires_at, s.password_version, i.role FROM sessions s JOIN invitations i ON i.id = s.invitation_id WHERE s.token_hash = ? AND s.expires_at > ? AND i.expires_at > ? AND i.revoked = 0",
       yield* hash(bearer),
       now,
       now,
     );
     if (!auth)
       return yield* Effect.fail(fail(401, "Your review session has expired or was revoked."));
+    if (auth.role === "client" && auth.password_version !== (yield* passwordVersion(env)))
+      return yield* Effect.fail(
+        fail(401, "The review password has changed. Reopen your invitation link."),
+      );
     if (url.pathname === "/session" && request.method === "GET")
       return json({ name: auth.name, role: auth.role, expiresAt: auth.expires_at });
     if (url.pathname === "/annotations" && request.method === "GET") {

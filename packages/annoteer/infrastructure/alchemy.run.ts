@@ -1,4 +1,5 @@
 import alchemy from "alchemy";
+import { prepareReviewPassword, readReviewConfig } from "./password";
 import { D1Database, Worker } from "alchemy/cloudflare";
 import { readFile, writeFile } from "node:fs/promises";
 
@@ -10,6 +11,7 @@ const secrets = JSON.parse(await readFile("./secrets.json", "utf8")) as {
   adminToken: string;
   password: string;
 };
+const reviewAccess = await prepareReviewPassword((await readReviewConfig()).password);
 const app = await alchemy(config.name, { stage: "prod", password: secrets.password });
 const db = await D1Database("feedback", {
   name: `${config.name}-feedback`,
@@ -24,6 +26,8 @@ export const worker = await Worker("api", {
   bindings: {
     DB: db,
     ADMIN_TOKEN: alchemy.secret(secrets.adminToken),
+    REVIEW_PASSWORD_VERSION: reviewAccess.passwordVersion,
+    REVIEW_PASSWORD_HASH: alchemy.secret(reviewAccess.passwordHash),
     ALLOWED_ORIGINS: config.origins.join(","),
   },
 });

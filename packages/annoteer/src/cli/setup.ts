@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Data, Effect } from "effect";
@@ -61,11 +61,22 @@ export const scaffold = (
     // Ignore secrets before writing them, including when setup is interrupted.
     const ignore = join(cwd, ".gitignore");
     const previous = (await exists(ignore)) ? await readFile(ignore, "utf8") : "";
-    if (!previous.split("\n").includes("/.annoteer/"))
+    const missing = ["/.annoteer/", "/annoteer.jsonc"].filter(
+      (line) => !previous.split("\n").includes(line),
+    );
+    if (missing.length)
       await writeFile(
         ignore,
-        `${previous}${previous && !previous.endsWith("\n") ? "\n" : ""}/.annoteer/\n`,
+        `${previous}${previous && !previous.endsWith("\n") ? "\n" : ""}${missing.join("\n")}\n`,
       );
+    const reviewConfig = join(cwd, "annoteer.jsonc");
+    if (!(await exists(reviewConfig)))
+      await writeFile(
+        reviewConfig,
+        '{\n  // Optional password required with client review links.\n  // Uncomment, choose your password, then run: npx annoteer deploy\n  // "password": "replace-with-your-password"\n}\n',
+        { mode: 0o600 },
+      );
+    await chmod(reviewConfig, 0o600);
     await mkdir(dir, { recursive: true, mode: 0o700 });
     const configPath = join(dir, "config.json");
     if (await exists(configPath)) {
@@ -74,7 +85,8 @@ export const scaffold = (
         throw new Error(
           "This project already has an Annoteer setup. Run annoteer deploy to update it.",
         );
-    } else await writeJson(configPath, config);
+    } else await writeJson(configPath, config, true);
+    await chmod(configPath, 0o600);
     const secretsPath = join(dir, "secrets.json");
     if (!(await exists(secretsPath)))
       await writeJson(
@@ -88,7 +100,12 @@ export const scaffold = (
       private: true,
       type: "module",
       scripts: { deploy: "node --import tsx alchemy.run.ts", login: "alchemy login cloudflare" },
-      dependencies: { alchemy: "0.94.0", tsx: "4.23.13" },
+      dependencies: {
+        alchemy: "0.94.0",
+        tsx: "4.23.13",
+        bcryptjs: "3.0.3",
+        "jsonc-parser": "3.3.1",
+      },
     });
     return resolve(dir);
   });

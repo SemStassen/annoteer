@@ -15,3 +15,8 @@ await cp(
 await cp(new URL("README.md", root), new URL("packages/annoteer/README.md", root));
 await cp(new URL("LICENSE", root), new URL("packages/annoteer/LICENSE", root));
 await chmod(new URL("packages/annoteer/dist/cli/index.mjs", root), 0o755);
+
+await cp(
+  new URL("packages/annoteer/infrastructure/password.ts", root),
+  new URL("packages/annoteer/template/password.ts", root),
+);

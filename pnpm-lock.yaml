@@ -26,9 +26,15 @@ importers:
       alchemy:
         specifier: 0.94.0
         version: 0.94.0(@types/node@24.13.4)(@voidzero-dev/vite-plus-core@0.3.1(@types/node@24.13.4)(esbuild@0.28.2)(tsx@4.23.13)(typescript@5.9.3)(yaml@2.9.1))(workerd@1.20260911.1)
+      bcryptjs:
+        specifier: 3.0.3
+        version: 3.0.3
       effect:
         specifier: ^3.22.2
         version: 3.22.2
+      jsonc-parser:
+        specifier: 3.3.1
+        version: 3.3.1
       miniflare:
         specifier: 4.20260708.1
         version: 4.20260708.1
@@ -56,6 +62,9 @@ importers:
 
   packages/annoteer:
     dependencies:
+      bcryptjs:
+        specifier: 3.0.3
+        version: 3.0.3
       effect:
         specifier: ^3.22.2
         version: 3.22.2
@@ -1867,6 +1876,10 @@ packages:
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
 
+  bcryptjs@3.0.3:
+    resolution: {integrity: sha512-GlF5wPWnSa/X5LKM1o0wz0suXIINz1iHRLvTS+sLyi7XPbe5ycmYI3DlZqVGZZtDgl4DmasFg7gOB3JYbphV5g==}
+    hasBin: true
+
   before-after-hook@3.0.2:
     resolution: {integrity: sha512-Nik3Sc0ncrMK4UUdXQmAnRtzmNQTAAXmXIopizwZ1W1t8QmfJj+zL4OA2I7XPTPW5z5TDqv4hRo/JzouDJnX3A==}
 
@@ -2201,6 +2214,9 @@ packages:
 
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
+
+  jsonc-parser@3.3.1:
+    resolution: {integrity: sha512-HUgH65KyejrUFPvHFPbqOY0rsFip3Bo5wb4ngvdi1EpCYWUQDC5V+Y7mZws+DLkr4M//zQJoanu1SP+87Dv1oQ==}
 
   jszip@3.10.2:
     resolution: {integrity: sha512-3l+rb15IOWtUhU0H5MFqES/T6Kh7abYwjosBey/vD6hDt8zoEffkSC5Ws5SGtgVw3gBx2NEbhTeSW1+kWkpyTQ==}
@@ -4073,6 +4089,8 @@ snapshots:
 
   balanced-match@1.0.2: {}
 
+  bcryptjs@3.0.3: {}
+
   before-after-hook@3.0.2: {}
 
   blake3-wasm@2.1.5: {}
@@ -4363,6 +4381,8 @@ snapshots:
       '@pkgjs/parseargs': 0.11.0
 
   js-tokens@4.0.0: {}
+
+  jsonc-parser@3.3.1: {}
 
   jszip@3.10.2:
     dependencies:

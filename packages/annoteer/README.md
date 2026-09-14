@@ -63,7 +63,7 @@ After a future npm release, installation starts with `npx annoteer init`. **The 
 ## Review flow
 
 1. Share the **client** link. Keep the **agency** link private.
-2. The reviewer enters their name—no account or password.
+2. The reviewer enters their name and, if configured, the shared review password.
 3. Choose **Add feedback**, then click an element or drag to select text.
 4. Discuss feedback in threads. Agency reviewers can resolve or reopen notes.
 5. New feedback syncs every five seconds while the page is visible.
@@ -80,6 +80,7 @@ Invitations expire after 30 days by default (1–90 configurable). A reviewer se
 
 ## Configuration and data
 
+- `annoteer.jsonc`: optional private review password. Generated at the project root and gitignored; read during deployment only.
 - `annoteer.config.json`: public Worker endpoint; safe to commit.
 - `annoteer.tsx`: generated integration component; safe to commit.
 - `.annoteer/`: private deployment project, credentials, Alchemy state, links. Gitignored **before** secrets are written. Back it up securely; retain its state and encryption password for redeployments. Do not commit it or put it under a static/public directory.
@@ -88,6 +89,21 @@ Invitations expire after 30 days by default (1–90 configurable). A reviewer se
 - `data-annoteer-id="hero-title"`: optional stable anchor for important elements.
 - `data-annoteer-ignore`: prevents selecting private areas. Form controls and editable fields are excluded by default.
 - `nonce` prop: supplies the widget’s style nonce for CSP-enabled sites; allow your Worker endpoint in `connect-src`.
+
+To require a password for client review links, edit **`annoteer.jsonc`**:
+
+```jsonc
+{
+  // Share this password with your client separately from their review link.
+  "password": "your-shared-review-password",
+}
+```
+
+Run `npx annoteer deploy` to apply changes. Comments and trailing commas are supported. Passwords must contain at least 8 non-padding characters and at most 72 UTF-8 bytes. Remove the `password` field to disable the requirement; `{}` is valid. The local demo reads the same file when `pnpm dev` starts.
+
+Clients still need an invitation link; agency links bypass this client password. Changing, enabling, or removing the password invalidates existing client sessions after deployment, so clients must reopen their links. Unchanged passwords preserve sessions. Email allowlists are deferred.
+
+Keep this file private: it contains the plain-text password and must never be imported into your React app or placed in a public directory. Deployment sends only a salted bcrypt hash to the Worker as a secret; browsers submit the password for verification without persisting it. Password verification is limited to 10 attempts per invitation and IP per 15 minutes, including successful attempts. Bcrypt verification adds Worker CPU usage; the password flow has been tested locally, but still needs verification on your Cloudflare plan.
 
 The API validates requests with Effect Schema, stores only hashes of invite/session tokens, enforces role checks, bounds request sizes, and applies per-session write quotas. CORS is an additional restriction, not authentication. The invitation is placed in the URL fragment, removed on entry, and exchanged for a session kept in sessionStorage. Page queries are intentionally excluded from stored page paths.
 

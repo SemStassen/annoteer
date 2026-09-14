@@ -1,0 +1,4 @@
+{
+  // Copy to annoteer.jsonc, set a password, then run: npx annoteer deploy
+  // "password": "your-shared-review-password"
+}

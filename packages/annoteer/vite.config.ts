@@ -28,7 +28,7 @@ export default defineConfig({
       platform: "browser",
       outDir: "template/worker",
       dts: false,
-      deps: { alwaysBundle: ["effect"], onlyBundle: ["effect"] },
+      deps: { alwaysBundle: ["effect", "bcryptjs"], onlyBundle: ["effect", "bcryptjs"] },
       sourcemap: true,
     },
   ],

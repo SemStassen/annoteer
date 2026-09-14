@@ -156,7 +156,10 @@ const main = Effect.gen(function* () {
     readJson<{ adminToken: string }>(join(dir, "secrets.json")),
   );
   if (action === "init" || action === "deploy") {
-    if (action === "deploy") yield* scaffold(cwd, config);
+    if (action === "deploy") {
+      yield* scaffold(cwd, config);
+      if (!values["skip-install"]) yield* command(npm, ["install", "--no-audit", "--no-fund"], dir);
+    }
     if (!values["skip-login"] && !process.env.CLOUDFLARE_API_TOKEN)
       yield* command(npm, ["run", "login"], dir);
     yield* command(npm, ["run", "deploy"], dir);

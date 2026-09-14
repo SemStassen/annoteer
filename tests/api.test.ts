@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 import { Miniflare } from "miniflare";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 
 const admin = "a".repeat(64);
 let mf: Miniflare;
@@ -49,12 +49,16 @@ beforeAll(async () => {
     bindings: { ADMIN_TOKEN: admin, ALLOWED_ORIGINS: "http://127.0.0.1:5173" },
   });
   const db = await mf.getD1Database("DB");
-  for (const sql of (
-    await readFile("packages/annoteer/infrastructure/migrations/0001_initial.sql", "utf8")
-  )
-    .split(";")
-    .filter((part) => part.trim()))
-    await db.prepare(sql).run();
+  for (const file of (await readdir("packages/annoteer/infrastructure/migrations"))
+    .filter((name) => name.endsWith(".sql"))
+    .sort()) {
+    for (const sql of (
+      await readFile(`packages/annoteer/infrastructure/migrations/${file}`, "utf8")
+    )
+      .split(";")
+      .filter((part) => part.trim()))
+      await db.prepare(sql).run();
+  }
 });
 afterAll(async () => {
   await mf?.dispose();

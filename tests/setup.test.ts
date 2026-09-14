@@ -1,6 +1,6 @@
 import { afterEach, expect, it } from "vite-plus/test";
 import { Effect } from "effect";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
 import { parseSite, reviewLink, scaffold } from "../packages/annoteer/src/cli/setup";
@@ -18,10 +18,16 @@ it("scaffolds a resumable private deployment without leaking secrets into public
   };
   const dir = await Effect.runPromise(scaffold(cwd, config, resolve("packages/annoteer/template")));
   const secrets = await readFile(join(dir, "secrets.json"), "utf8");
+  const configPath = join(cwd, "annoteer.jsonc");
+  expect(await readFile(configPath, "utf8")).toContain('// "password":');
+  const privateConfig = '{ "password": "private-test-password" }';
+  await writeFile(configPath, privateConfig);
   await Effect.runPromise(scaffold(cwd, config, resolve("packages/annoteer/template")));
+  expect(await readFile(configPath, "utf8")).toBe(privateConfig);
+  expect((await stat(configPath)).mode & 0o777).toBe(0o600);
   expect(await readFile(join(dir, "secrets.json"), "utf8")).toBe(secrets);
   expect((await stat(join(dir, "secrets.json"))).mode & 0o777).toBe(0o600);
-  expect(await readFile(join(cwd, ".gitignore"), "utf8")).toBe("/.annoteer/\n");
+  expect(await readFile(join(cwd, ".gitignore"), "utf8")).toBe("/.annoteer/\n/annoteer.jsonc\n");
   expect(await readFile(join(dir, "config.json"), "utf8")).not.toContain("adminToken");
   await expect(
     Effect.runPromise(

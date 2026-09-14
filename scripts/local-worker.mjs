@@ -1,10 +1,22 @@
+import { migrateLocal } from "./migrate-local.mjs";
+import {
+  readReviewConfig,
+  prepareReviewPassword,
+} from "../packages/annoteer/infrastructure/password.ts";
 import { Miniflare } from "miniflare";
-import { readFile, mkdir } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 export const DEMO_ADMIN = "a".repeat(64);
 export async function localWorker({ port, persist } = {}) {
   if (persist) await mkdir(persist, { recursive: true });
+  const config = await readReviewConfig(
+    fileURLToPath(new URL("../annoteer.jsonc", import.meta.url)),
+  );
+  const reviewAccess = await prepareReviewPassword(
+    config.password,
+    fileURLToPath(new URL("../.annoteer/demo/review-password.json", import.meta.url)),
+  );
   const mf = new Miniflare({
     modules: true,
     scriptPath: fileURLToPath(
@@ -16,16 +28,14 @@ export async function localWorker({ port, persist } = {}) {
     d1Databases: ["DB"],
     ...(persist ? { d1Persist: persist } : {}),
     bindings: {
+      REVIEW_PASSWORD_HASH: reviewAccess.passwordHash,
+      REVIEW_PASSWORD_VERSION: reviewAccess.passwordVersion,
       ADMIN_TOKEN: DEMO_ADMIN,
       ALLOWED_ORIGINS: "http://127.0.0.1:5173,http://localhost:5173",
     },
   });
   const db = await mf.getD1Database("DB");
-  const migration = await readFile(
-    new URL("../packages/annoteer/infrastructure/migrations/0001_initial.sql", import.meta.url),
-    "utf8",
-  );
-  for (const sql of migration.split(";").filter((part) => part.trim())) await db.prepare(sql).run();
+  await migrateLocal(db);
   await mf.ready;
   return mf;
 }

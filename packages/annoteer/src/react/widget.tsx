@@ -1,10 +1,18 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { createPortal } from "react-dom";
-import type { Anchor, Annotation, Session } from "../domain/schema";
-import { captureAnchor, isPrivate, resolveAnchor } from "./anchors";
 import { request } from "./api";
 import { styles } from "./styles";
+
+import { useShadowRoot } from "./hooks/use-shadow-root";
+import { useAnnotations } from "./hooks/use-annotations";
+import { useAnnotationPositions } from "./hooks/use-annotation-positions";
+import { usePageSelection } from "./hooks/use-page-selection";
+import { useReviewSession } from "./hooks/use-review-session";
+import { ReviewEntry } from "./components/review-entry";
+import { FeedbackComposer } from "./components/feedback-composer";
+import { FeedbackThread } from "./components/feedback-thread";
+import { FeedbackList } from "./components/feedback-list";
 
 export interface AnnoteerProps {
   /** Your deployed Annoteer Worker URL. */
@@ -14,273 +22,37 @@ export interface AnnoteerProps {
   /** Nonce for sites with a Content Security Policy. */
   nonce?: string;
 }
-const storage = {
-  get(key: string) {
-    try {
-      return sessionStorage.getItem(key);
-    } catch {
-      return null;
-    }
-  },
-  set(key: string, value: string) {
-    try {
-      sessionStorage.setItem(key, value);
-    } catch {
-      /* In-memory review still works. */
-    }
-  },
-  remove(key: string) {
-    try {
-      sessionStorage.removeItem(key);
-    } catch {
-      /* Storage may be disabled. */
-    }
-  },
-};
 export function Annoteer({ endpoint, deployment = "main", nonce }: AnnoteerProps) {
-  const [root, setRoot] = useState<ShadowRoot | null>(null);
-  const host = useRef<HTMLDivElement | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [invitation, setInvitation] = useState<string | null>(null);
-  const [passwordRequired, setPasswordRequired] = useState<boolean | null>(null);
+  const { root, host } = useShadowRoot();
+
   const [panel, setPanel] = useState(false);
-  const [selecting, setSelecting] = useState(false);
-  const [draft, setDraft] = useState<Anchor | null>(null);
-  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+
   const [active, setActive] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [filter, setFilter] = useState<"open" | "resolved">("open");
   const [allPages, setAllPages] = useState(false);
-  const [path, setPath] = useState("");
-  const [hover, setHover] = useState<DOMRect | null>(null);
-  const [positions, setPositions] = useState<Record<string, DOMRect>>({});
-  const key = `annoteer:${endpoint.replace(/\/$/, "")}`;
-  useEffect(() => {
-    const node = document.createElement("div");
-    node.setAttribute("data-annoteer-root", "");
-    node.style.cssText = "position:fixed;inset:0;z-index:2147483646;pointer-events:none;";
-    const shadow = node.attachShadow({ mode: "open" });
-    document.body.append(node);
-    host.current = node;
-    setRoot(shadow);
-    return () => {
-      node.remove();
-      host.current = null;
-    };
-  }, []);
-  useEffect(() => {
-    let revision = 0;
-    const enter = () => {
-      const current = ++revision;
-      setSession(null);
-      setInvitation(null);
-      setAnnotations([]);
-      setError("");
-      setDraft(null);
-      setActive(null);
-      setSelecting(false);
-      const params = new URLSearchParams(location.hash.slice(1));
-      const secret = params.get("annoteer");
-      if (secret) {
-        storage.set(`${key}:invite`, secret);
-        params.delete("annoteer");
-        history.replaceState(
-          history.state,
-          "",
-          `${location.pathname}${location.search}${params.size ? `#${params}` : ""}`,
-        );
-        storage.remove(key);
-      }
-      const pending = secret ?? storage.get(`${key}:invite`);
-      if (pending) {
-        setInvitation(pending);
-        setPanel(true);
-        return;
-      }
-      const saved = storage.get(key);
-      if (!saved) return;
-      try {
-        const candidate = JSON.parse(saved) as Session;
-        request<Omit<Session, "token">>(endpoint, "/session", candidate.token)
-          .then((data) => {
-            if (revision === current) setSession({ ...data, token: candidate.token });
-          })
-          .catch(() => {
-            if (revision === current) {
-              storage.remove(key);
-              setError("Your review session ended. Reopen your invitation link.");
-              setPanel(true);
-            }
-          });
-      } catch {
-        storage.remove(key);
-      }
-    };
-    const onHashChange = () => {
-      if (new URLSearchParams(location.hash.slice(1)).has("annoteer")) enter();
-    };
-    enter();
-    window.addEventListener("hashchange", onHashChange);
-    return () => {
-      revision++;
-      window.removeEventListener("hashchange", onHashChange);
-    };
-  }, [endpoint, key]);
-  useEffect(() => {
-    setPasswordRequired(null);
-    if (!invitation) return;
-    let cancelled = false;
-    request<{ passwordRequired: boolean }>(endpoint, "/review-access", undefined, {
-      token: invitation,
-    })
-      .then((data) => {
-        if (!cancelled) setPasswordRequired(data.passwordRequired);
-      })
-      .catch((cause: Error) => {
-        if (!cancelled) setError(cause.message);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [endpoint, invitation]);
-  const refresh = useCallback(async () => {
-    if (!session) return;
-    const data = await request<Annotation[]>(
-      endpoint,
-      `/annotations?deployment=${encodeURIComponent(deployment)}`,
-      session.token,
-    );
-    setAnnotations(data);
-  }, [endpoint, deployment, session]);
-  useEffect(() => {
-    if (!session) return;
-    let cancelled = false;
-    const update = () =>
-      request<Annotation[]>(
-        endpoint,
-        `/annotations?deployment=${encodeURIComponent(deployment)}`,
-        session.token,
-      )
-        .then((data) => {
-          if (!cancelled) setAnnotations(data);
-        })
-        .catch((cause: Error) => {
-          if (!cancelled) setError(cause.message);
-        });
-    void update();
-    const timer = setInterval(() => {
-      if (!document.hidden) void update();
-    }, 5000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [endpoint, deployment, session]);
-  useEffect(() => {
-    let frame = 0;
-    const update = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        const current = location.pathname;
-        setPath(current);
-        const next: Record<string, DOMRect> = {};
-        for (const annotation of annotations)
-          if (annotation.path === current && annotation.status === "open") {
-            const target = resolveAnchor(annotation.anchor);
-            if (target) next[annotation.id] = target.rect;
-          }
-        setPositions(next);
-      });
-    };
-    update();
-    const observer = new MutationObserver(update);
-    observer.observe(document.body, {
-      subtree: true,
-      childList: true,
-      characterData: true,
-      attributes: true,
-    });
-    const resize = new ResizeObserver(update);
-    resize.observe(document.body);
-    window.addEventListener("scroll", update, true);
-    window.addEventListener("resize", update);
-    const timer = setInterval(update, 1000);
-    return () => {
-      observer.disconnect();
-      resize.disconnect();
-      clearInterval(timer);
-      cancelAnimationFrame(frame);
-      window.removeEventListener("scroll", update, true);
-      window.removeEventListener("resize", update);
-    };
-  }, [annotations]);
-  useEffect(() => {
-    const own = (event: Event) => host.current && event.composedPath().includes(host.current);
-    const choose = (anchor: Anchor) => {
-      setDraft(anchor);
-      setActive(null);
-      setPanel(true);
-      setSelecting(false);
-      setHover(null);
-    };
-    const move = (event: MouseEvent) => {
-      const element = event.target;
-      setHover(
-        selecting && !own(event) && element instanceof Element && !isPrivate(element)
-          ? element.getBoundingClientRect()
-          : null,
-      );
-    };
-    const click = (event: MouseEvent) => {
-      if (!selecting || own(event) || !(event.target instanceof Element) || isPrivate(event.target))
-        return;
-      event.preventDefault();
-      event.stopPropagation();
-      const selection = window.getSelection();
-      if (selection && !selection.isCollapsed) return;
-      choose(captureAnchor(event.target));
-    };
-    const mouseup = (event: MouseEvent) => {
-      if (!selecting || own(event)) return;
-      const selection = window.getSelection();
-      if (!selection || selection.isCollapsed || !selection.rangeCount) return;
-      const range = selection.getRangeAt(0);
-      const node = range.commonAncestorContainer;
-      const element = node instanceof Element ? node : node.parentElement;
-      if (
-        !element ||
-        isPrivate(element) ||
-        element.querySelector('[data-annoteer-ignore],input,textarea,[contenteditable="true"]')
-      )
-        return;
-      if (range.toString().length > 2000) {
-        setError("Select a shorter passage (up to 2,000 characters).");
-        setPanel(true);
-        return;
-      }
-      choose(captureAnchor(element, range));
-      selection.removeAllRanges();
-    };
-    const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setSelecting(false);
-        setDraft(null);
-        setHover(null);
-        setPanel(false);
-      }
-    };
-    document.addEventListener("mousemove", move);
-    document.addEventListener("click", click, true);
-    document.addEventListener("mouseup", mouseup);
-    document.addEventListener("keydown", escape);
-    return () => {
-      document.removeEventListener("mousemove", move);
-      document.removeEventListener("click", click, true);
-      document.removeEventListener("mouseup", mouseup);
-      document.removeEventListener("keydown", escape);
-    };
-  }, [selecting]);
+
+  const { selecting, setSelecting, draft, setDraft, hover } = usePageSelection(
+    host,
+    setActive,
+    setPanel,
+    setError,
+  );
+  const onEnter = useCallback(() => {
+    setError("");
+    setDraft(null);
+    setActive(null);
+    setSelecting(false);
+  }, [setDraft, setSelecting]);
+  const { session, invitation, passwordRequired, login, logout } = useReviewSession(
+    endpoint,
+    onEnter,
+    setPanel,
+    setError,
+  );
+  const { annotations, refresh } = useAnnotations(endpoint, deployment, session, setError);
+  const { path, positions } = useAnnotationPositions(annotations);
   const perform = async (work: () => Promise<void>) => {
     setBusy(true);
     setError("");
@@ -399,238 +171,73 @@ export function Annoteer({ endpoint, deployment = "main", nonce }: AnnoteerProps
           )}
           <div className="scroll">
             {!session && invitation && (
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const data = new FormData(event.currentTarget);
-                  void perform(async () => {
-                    const next = await request<Session>(endpoint, "/sessions", undefined, {
-                      token: invitation,
-                      name: data.get("name"),
-                      password: data.get("password") || undefined,
-                    });
-                    storage.set(key, JSON.stringify(next));
-                    storage.remove(`${key}:invite`);
-                    setSession(next);
-                    setInvitation(null);
-                  });
-                }}
-              >
-                <p style={{ marginBottom: 12 }}>
-                  Click what catches your eye, highlight a sentence, or tell us what could be
-                  better.
-                </p>
-                <label>
-                  Your name
-                  <input
-                    name="name"
-                    placeholder="e.g. Alex"
-                    required
-                    maxLength={80}
-                    autoComplete="name"
-                  />
-                </label>
-                {passwordRequired && (
-                  <label>
-                    Review password
-                    <input
-                      name="password"
-                      type="password"
-                      required
-                      maxLength={72}
-                      autoComplete="current-password"
-                    />
-                  </label>
-                )}
-                <button className="primary" disabled={busy || passwordRequired === null}>
-                  Start reviewing ↗
-                </button>
-                <p className="muted">
-                  Your name and comments are visible to others reviewing this project.
-                </p>
-              </form>
+              <ReviewEntry
+                passwordRequired={passwordRequired}
+                busy={busy}
+                onSubmit={(name, password) => void perform(() => login(name, password))}
+              />
             )}
             {session && draft && (
-              <form
-                key={draft.selector + draft.quote}
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const data = new FormData(event.currentTarget);
+              <FeedbackComposer
+                draft={draft}
+                busy={busy}
+                onCancel={() => setDraft(null)}
+                onSubmit={(body) =>
                   void perform(async () => {
                     await request(endpoint, "/annotations", session.token, {
                       path: location.pathname,
                       deployment,
                       anchor: draft,
-                      body: data.get("body"),
+                      body,
                     });
                     setDraft(null);
                     await refresh();
-                  });
-                }}
-              >
-                <div className="quote">{draft.quote ?? draft.label ?? draft.tag}</div>
-                <label>
-                  What would you change?
-                  <textarea
-                    name="body"
-                    placeholder="A little more breathing room here…"
-                    required
-                    maxLength={5000}
-                    autoFocus
-                  />
-                </label>
-                <button className="primary" disabled={busy}>
-                  Add feedback ↗
-                </button>
-                <button type="button" className="secondary" onClick={() => setDraft(null)}>
-                  Cancel
-                </button>
-              </form>
+                  })
+                }
+              />
             )}
             {session && !draft && current && (
-              <div>
-                <button className="back" onClick={() => setActive(null)}>
-                  ← All feedback
-                </button>
-                <div className="meta">
-                  <span className="avatar">{current.author.slice(0, 1).toUpperCase()}</span>
-                  {current.author}
-                  <span className="status">{current.status}</span>
-                </div>
-                <p className="note">{current.body}</p>
-                <div className="quote">
-                  {current.anchor.quote || current.anchor.label || current.anchor.tag}
-                </div>
-                <p className="muted">{current.path}</p>
-                {current.path !== path ? (
-                  <a href={current.path}>Go to this page ↗</a>
-                ) : current.status === "open" && !positions[current.id] ? (
-                  <p className="muted">Target changed or is currently hidden.</p>
-                ) : (
-                  <button
-                    className="back"
-                    style={{ marginTop: 12 }}
-                    onClick={() =>
-                      resolveAnchor(current.anchor)?.element.scrollIntoView({
-                        behavior: "smooth",
-                        block: "center",
-                      })
-                    }
-                  >
-                    Show on page ↗
-                  </button>
-                )}
-                {current.replies.map((reply) => (
-                  <div className="reply" key={reply.id}>
-                    <div className="meta">
-                      <span className="avatar">{reply.author.slice(0, 1).toUpperCase()}</span>
-                      {reply.author} {reply.role === "agency" && "· Agency"}
-                    </div>
-                    <p className="note">{reply.body}</p>
-                  </div>
-                ))}
-                <form
-                  key={current.id + current.replies.length}
-                  style={{ marginTop: 18 }}
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    const data = new FormData(event.currentTarget);
-                    void perform(async () => {
-                      await request(endpoint, `/annotations/${current.id}/replies`, session.token, {
-                        body: data.get("body"),
-                      });
-                      await refresh();
+              <FeedbackThread
+                current={current}
+                role={session.role}
+                path={path}
+                hasPosition={Boolean(positions[current.id])}
+                busy={busy}
+                onBack={() => setActive(null)}
+                onReply={(body) =>
+                  void perform(async () => {
+                    await request(endpoint, `/annotations/${current.id}/replies`, session.token, {
+                      body,
                     });
-                  }}
-                >
-                  <label>
-                    Keep the conversation going
-                    <textarea name="body" placeholder="Write a reply…" required maxLength={5000} />
-                  </label>
-                  <button className="secondary" disabled={busy}>
-                    Reply
-                  </button>
-                </form>
-                {session.role === "agency" && (
-                  <div className="actions">
-                    <button
-                      className="primary"
-                      disabled={busy}
-                      onClick={() =>
-                        void perform(async () => {
-                          await request(
-                            endpoint,
-                            `/annotations/${current.id}`,
-                            session.token,
-                            { status: current.status === "open" ? "resolved" : "open" },
-                            "PATCH",
-                          );
-                          await refresh();
-                        })
-                      }
-                    >
-                      {current.status === "open" ? "✓ Mark as resolved" : "Reopen feedback"}
-                    </button>
-                  </div>
-                )}
-              </div>
+                    await refresh();
+                  })
+                }
+                onToggleStatus={() =>
+                  void perform(async () => {
+                    await request(
+                      endpoint,
+                      `/annotations/${current.id}`,
+                      session.token,
+                      { status: current.status === "open" ? "resolved" : "open" },
+                      "PATCH",
+                    );
+                    await refresh();
+                  })
+                }
+              />
             )}
-            {session &&
-              !draft &&
-              !current &&
-              (visible.length ? (
-                visible.map((item) => (
-                  <button className="card" key={item.id} onClick={() => setActive(item.id)}>
-                    <div className="meta">
-                      <span className="avatar">{item.author.slice(0, 1).toUpperCase()}</span>
-                      {item.author}
-                      <span className="status">
-                        {item.replies.length ? `${item.replies.length} replies` : item.anchor.kind}
-                      </span>
-                    </div>
-                    <p className="note">{item.body}</p>
-                    <div className="quote">
-                      {item.anchor.quote || item.anchor.label || item.anchor.tag}
-                    </div>
-                    <p className="muted">{item.path}</p>
-                  </button>
-                ))
-              ) : (
-                <div className="empty">
-                  <span className="symbol">↗</span>
-                  <strong>
-                    {filter === "open"
-                      ? "Room for your perspective."
-                      : "Good things take feedback."}
-                  </strong>
-                  <p>
-                    {filter === "open"
-                      ? "Point to something on the page and leave your first note."
-                      : "Resolved notes will appear here."}
-                  </p>
-                  {filter === "open" && (
-                    <button className="secondary" style={{ marginTop: 20 }} onClick={start}>
-                      + Add feedback
-                    </button>
-                  )}
-                </div>
-              ))}
+            {session && !draft && !current && (
+              <FeedbackList
+                visible={visible}
+                filter={filter}
+                onSelect={setActive}
+                onStart={start}
+              />
+            )}
           </div>
           <div className="footer">
             <span>↗ annoteer · Thoughtfully noted.</span>
-            {session && (
-              <button
-                onClick={() => {
-                  storage.remove(key);
-                  setSession(null);
-                  setInvitation(null);
-                  setPanel(false);
-                  setError("");
-                }}
-              >
-                Leave review
-              </button>
-            )}
+            {session && <button onClick={logout}>Leave review</button>}
           </div>
         </aside>
       )}

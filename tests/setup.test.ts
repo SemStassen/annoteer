@@ -3,7 +3,8 @@ import { Effect } from "effect";
 import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve, join } from "node:path";
-import { parseSite, reviewLink, scaffold } from "../packages/annoteer/src/cli/setup";
+import { scaffold } from "../packages/annoteer/src/cli/setup";
+import { parseSite, reviewLink } from "../packages/annoteer/src/cli/project";
 const dirs: string[] = [];
 afterEach(async () => {
   for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true });

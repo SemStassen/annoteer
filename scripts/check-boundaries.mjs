@@ -34,6 +34,55 @@ async function visit(directory) {
         reason = `${owner} must not depend on Node or Cloudflare`;
       else if (owner === "domain" && !target && !/^effect(?:\/|$)/.test(specifier))
         reason = "domain may only depend on Effect and other domain modules";
+      const local = relative(source, path).split(sep).join("/");
+      const imported =
+        target &&
+        relative(source, target)
+          .split(sep)
+          .join("/")
+          .replace(/\.[cm]?[jt]sx?$/, "");
+      if (!reason && imported) {
+        if (
+          local.startsWith("react/components/") &&
+          /^react\/(hooks\/|api$|widget$)/.test(imported)
+        )
+          reason =
+            "React components receive data and callbacks; they must not own API or session orchestration";
+        else if (
+          local.startsWith("react/hooks/") &&
+          /^react\/(components\/|widget$)/.test(imported)
+        )
+          reason = "React hooks must not depend on presentation components";
+        else if (
+          local.startsWith("server/") &&
+          local !== "server/index.ts" &&
+          imported === "server/env"
+        )
+          reason = "Cloudflare environment bindings belong at the Worker composition root";
+        else if (
+          local.startsWith("server/") &&
+          local !== "server/index.ts" &&
+          ["server/router", "server/index"].includes(imported)
+        )
+          reason = "Worker features must not depend on their router or entrypoint";
+        else if (
+          local.startsWith("cli/") &&
+          !["cli/index.ts", "cli/program.ts"].includes(local) &&
+          ["cli/program", "cli/index"].includes(imported)
+        )
+          reason = "CLI capabilities must not depend on command dispatch or process startup";
+        else if (
+          [
+            "cli/process.ts",
+            "cli/admin-api.ts",
+            "cli/project.ts",
+            "cli/errors.ts",
+            "cli/setup.ts",
+          ].includes(local) &&
+          imported.startsWith("cli/commands/")
+        )
+          reason = "CLI adapters and scaffolding must not depend on command workflows";
+      }
       if (reason) errors.push(`${relative(process.cwd(), path)}: ${reason} (${specifier})`);
     };
     const walk = (node) => {

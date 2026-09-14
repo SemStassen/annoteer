@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import type { Env } from "./env";
-import { route } from "./handlers";
+import { route } from "./router";
+import { d1DatabaseLayer } from "./database";
 import { json } from "./http";
 
 export default {
@@ -12,7 +13,15 @@ export default {
       request.method === "OPTIONS"
         ? new Response(null, { status: 204 })
         : await Effect.runPromise(
-            route(request, env).pipe(
+            route(
+              request,
+              {
+                passwordHash: env.REVIEW_PASSWORD_HASH,
+                passwordVersion: env.REVIEW_PASSWORD_VERSION,
+              },
+              env.ADMIN_TOKEN,
+            ).pipe(
+              Effect.provide(d1DatabaseLayer(env.DB)),
               Effect.catchAll((error) =>
                 Effect.succeed(json({ error: error.message }, error.status)),
               ),

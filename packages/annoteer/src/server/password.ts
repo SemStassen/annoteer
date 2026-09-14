@@ -1,9 +1,13 @@
 import { compare } from "bcryptjs";
-import type { Env } from "./env";
+/** Deployment-owned client password settings, independent of Cloudflare bindings. */
+export interface ReviewPolicy {
+  passwordHash?: string;
+  passwordVersion?: string;
+}
 import { attempt } from "./errors";
 import { hash } from "./credentials";
 
-export const passwordVersion = (env: Env) =>
-  hash(env.REVIEW_PASSWORD_VERSION ?? env.REVIEW_PASSWORD_HASH ?? "");
-export const verifyPassword = (password: string, env: Env) =>
-  attempt(() => compare(password, env.REVIEW_PASSWORD_HASH ?? ""));
+export const passwordVersion = (policy: ReviewPolicy) =>
+  hash(policy.passwordVersion ?? policy.passwordHash ?? "");
+export const verifyPassword = (password: string, policy: ReviewPolicy) =>
+  attempt(() => compare(password, policy.passwordHash ?? ""));

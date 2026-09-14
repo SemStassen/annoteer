@@ -1,0 +1,15 @@
+{
+  "name": "annoteer-example",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vp dev --host 127.0.0.1",
+    "build": "vp build"
+  },
+  "dependencies": {
+    "annoteer": "workspace:*",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  }
+}

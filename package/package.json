@@ -1,0 +1,51 @@
+{
+  "name": "annoteer",
+  "version": "0.1.0",
+  "description": "Visual client feedback on your website, in your own Cloudflare account.",
+  "homepage": "https://github.com/SemStassen/annoteer#readme",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SemStassen/annoteer.git",
+    "directory": "package"
+  },
+  "bin": {
+    "annoteer": "./dist/cli/index.mjs"
+  },
+  "files": [
+    "dist",
+    "template",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../scripts/clean-package.mjs && vp pack && node ../scripts/copy-template.mjs",
+    "prepack": "pnpm build"
+  },
+  "dependencies": {
+    "effect": "^3.22.2"
+  },
+  "devDependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "engines": {
+    "node": ">=22.12"
+  }
+}

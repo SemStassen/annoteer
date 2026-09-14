@@ -1,0 +1,15 @@
+node_modules/
+dist/
+package/template/
+artifacts/
+.vite/
+.alchemy/
+.annoteer/
+.env
+.env.*
+!.env.example
+.dev.vars
+playwright-report/
+test-results/
+.DS_Store
+*.tgz

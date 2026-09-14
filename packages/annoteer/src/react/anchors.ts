@@ -1,4 +1,4 @@
-import type { Anchor } from "../../shared/schema";
+import type { Anchor } from "../domain/schema";
 const normalized = (text: string) => text.replace(/\s+/g, " ").trim().slice(0, 300);
 const privateSelector =
   '[data-annoteer-ignore], input, textarea, select, [contenteditable]:not([contenteditable="false"])';

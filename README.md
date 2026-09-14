@@ -96,17 +96,21 @@ Annoteer captures the selected element’s label/selector and, for text, the quo
 ## Repository
 
 ```text
-package/            Publishable annoteer package (React exports + CLI bin)
-  src/              Shadow DOM widget, anchors, API client
-  example/          Vite+ React demo website
-cli/src/            Setup, deployment, invitations, revocation
-worker/             Effect API, SQL migrations, Alchemy infrastructure
-shared/             Runtime schemas and shared TypeScript contracts
-scripts/            Build assets and local development runner
-tests/              Worker integration, setup, and browser tests
+apps/playground/                    Runnable Vite+ React example
+packages/annoteer/                   Single publishable npm package
+  src/react/                        Widget, anchors, browser API client
+  src/cli/                          Setup, deployment, invitation commands
+  src/server/                       Worker entrypoint, HTTP handlers, credentials
+  src/domain/                       Shared Effect schemas and types
+  infrastructure/                   Alchemy template and SQL migrations
+docs/                               Architecture and ownership rules
+scripts/                            Build, local development, boundary checks
+tests/                              API, setup, and browser integration tests
 ```
 
-This follows the reference repo’s private pnpm root, publishable `package/`, and nested `package/example/`. Vite+ packs the React library, Node CLI, and standalone Worker separately. Consumers install one package; Alchemy is installed only into the generated deployment project, not the browser bundle. Alchemy is pinned to 0.94.0 and Effect to the 3.x line to avoid mixing in Alchemy 2 / Effect 4 prereleases.
+The layout takes inspiration from [Overseer’s workspace boundaries](https://github.com/dmmulroy/overseer/blob/main/docs/coding-standards.md): runnable apps live under `apps/`, reusable code under `packages/`, and runtime entrypoints stay thin. Annoteer keeps one public npm package with explicit React, CLI, server, and domain modules. See [the architecture notes](https://github.com/SemStassen/annoteer/blob/main/docs/architecture.md).
+
+Vite+ packs the React library, Node CLI, and standalone Worker separately. Consumers install one package; Alchemy is installed only into the generated deployment project, not the browser bundle. Alchemy stays pinned to 0.94.0 and Effect to the 3.x line; the structural changes do not require a prerelease migration.
 
 ```sh
 pnpm build        # vp pack library/CLI/Worker, vp build demo

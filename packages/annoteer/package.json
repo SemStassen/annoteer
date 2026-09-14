@@ -7,7 +7,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/SemStassen/annoteer.git",
-    "directory": "package"
+    "directory": "packages/annoteer"
   },
   "bin": {
     "annoteer": "./dist/cli/index.mjs"
@@ -31,7 +31,7 @@
     }
   },
   "scripts": {
-    "build": "node ../scripts/clean-package.mjs && vp pack && node ../scripts/copy-template.mjs",
+    "build": "node ../../scripts/clean-package.mjs && vp pack && node ../../scripts/copy-template.mjs",
     "prepack": "pnpm build"
   },
   "dependencies": {

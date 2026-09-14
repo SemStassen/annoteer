@@ -2,7 +2,7 @@ import { defineConfig } from "vite-plus";
 export default defineConfig({
   pack: [
     {
-      entry: ["src/index.ts"],
+      entry: ["src/react/index.ts"],
       format: "esm",
       clean: false,
       platform: "browser",
@@ -12,7 +12,8 @@ export default defineConfig({
       deps: { neverBundle: ["react", "react-dom", "react/jsx-runtime"] },
     },
     {
-      entry: ["../cli/src/index.ts"],
+      entry: ["src/cli/index.ts"],
+      outExtensions: () => ({ js: ".mjs" }),
       format: "esm",
       clean: false,
       platform: "node",
@@ -21,7 +22,7 @@ export default defineConfig({
       sourcemap: true,
     },
     {
-      entry: ["../worker/src/index.ts"],
+      entry: ["src/server/index.ts"],
       format: "esm",
       clean: false,
       platform: "browser",

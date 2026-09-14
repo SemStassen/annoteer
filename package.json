@@ -8,7 +8,7 @@
     "build": "pnpm --filter annoteer build && pnpm --filter annoteer-example build",
     "test": "vp test run",
     "typecheck": "tsc --noEmit",
-    "check": "vp check",
+    "check": "node scripts/check-boundaries.mjs && vp check",
     "format": "vp fmt",
     "pack": "pnpm --filter annoteer pack --pack-destination artifacts",
     "test:e2e": "playwright test",

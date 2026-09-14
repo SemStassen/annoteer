@@ -12,7 +12,9 @@
     "allowImportingTsExtensions": true,
     "noEmit": true,
     "types": ["node"],
-    "paths": { "annoteer": ["./package/src/index.ts"] }
+    "paths": {
+      "annoteer": ["./packages/annoteer/src/react/index.ts"]
+    }
   },
-  "include": ["package/src", "package/example/src", "cli", "worker", "shared", "tests", "*.ts"]
+  "include": ["apps/*/src", "packages/*/src", "packages/*/infrastructure", "tests", "*.ts"]
 }

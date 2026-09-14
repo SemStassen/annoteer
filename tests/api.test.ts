@@ -43,13 +43,15 @@ const annotation = {
 beforeAll(async () => {
   mf = new Miniflare({
     modules: true,
-    scriptPath: "package/template/worker/index.js",
+    scriptPath: "packages/annoteer/template/worker/index.js",
     compatibilityDate: "2026-07-01",
     d1Databases: ["DB"],
     bindings: { ADMIN_TOKEN: admin, ALLOWED_ORIGINS: "http://127.0.0.1:5173" },
   });
   const db = await mf.getD1Database("DB");
-  for (const sql of (await readFile("worker/migrations/0001_initial.sql", "utf8"))
+  for (const sql of (
+    await readFile("packages/annoteer/infrastructure/migrations/0001_initial.sql", "utf8")
+  )
     .split(";")
     .filter((part) => part.trim()))
     await db.prepare(sql).run();

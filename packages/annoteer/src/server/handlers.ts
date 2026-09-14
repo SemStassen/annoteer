@@ -1,70 +1,16 @@
-import type { D1Database } from "@cloudflare/workers-types";
-import { Data, Effect, Schema } from "effect";
+import { Effect } from "effect";
 import {
   CreateAnnotationSchema,
   InviteSchema,
   ReplySchema,
   SessionSchema,
   StatusSchema,
-} from "../../shared/schema";
+} from "../domain/schema";
+import type { Env } from "./env";
+import { attempt, fail } from "./errors";
+import { hash, token } from "./credentials";
+import { json, decode, readBody } from "./http";
 
-export interface Env {
-  DB: D1Database;
-  ADMIN_TOKEN: string;
-  ALLOWED_ORIGINS: string;
-}
-class ApiError extends Data.TaggedError("ApiError")<{ status: number; message: string }> {}
-const fail = (status: number, message: string) => new ApiError({ status, message });
-const attempt = <T>(run: () => Promise<T>) =>
-  Effect.tryPromise({
-    try: run,
-    catch: () => fail(500, "Unable to complete the request. Please try again."),
-  });
-const hash = (value: string) =>
-  attempt(async () =>
-    Array.from(
-      new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))),
-      (byte) => byte.toString(16).padStart(2, "0"),
-    ).join(""),
-  );
-const token = () =>
-  Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
-const json = (data: unknown, status = 200) => Response.json(data, { status });
-const decode = <A, I>(schema: Schema.Schema<A, I>, input: unknown) =>
-  Schema.decodeUnknown(schema)(input).pipe(
-    Effect.mapError(() => fail(400, "Invalid request fields.")),
-  );
-const readBody = (request: Request) =>
-  Effect.tryPromise({
-    try: async () => {
-      if (!request.headers.get("content-type")?.includes("application/json"))
-        throw fail(415, "Expected application/json.");
-      const reader = request.body?.getReader();
-      if (!reader) throw fail(400, "Expected a JSON body.");
-      let size = 0;
-      const chunks: Uint8Array[] = [];
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        size += value.length;
-        if (size > 32768) {
-          await reader.cancel();
-          throw fail(413, "Request is too large.");
-        }
-        chunks.push(value);
-      }
-      const bytes = new Uint8Array(size);
-      let offset = 0;
-      for (const chunk of chunks) {
-        bytes.set(chunk, offset);
-        offset += chunk.length;
-      }
-      return JSON.parse(new TextDecoder().decode(bytes)) as unknown;
-    },
-    catch: (error) => (error instanceof ApiError ? error : fail(400, "Invalid JSON body.")),
-  });
 interface Auth {
   id: string;
   name: string;
@@ -291,33 +237,3 @@ export const route = (request: Request, env: Env) =>
     }
     return yield* Effect.fail(fail(404, "Route not found."));
   });
-
-export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    const origin = request.headers.get("origin");
-    const allowed = env.ALLOWED_ORIGINS.split(",").map((entry) => entry.trim());
-    if (origin && !allowed.includes(origin)) return json({ error: "Origin not allowed." }, 403);
-    const response =
-      request.method === "OPTIONS"
-        ? new Response(null, { status: 204 })
-        : await Effect.runPromise(
-            route(request, env).pipe(
-              Effect.catchAll((error) =>
-                Effect.succeed(json({ error: error.message }, error.status)),
-              ),
-              Effect.catchAllDefect(() =>
-                Effect.succeed(json({ error: "An unexpected error occurred." }, 500)),
-              ),
-            ),
-          );
-    response.headers.set("Cache-Control", "no-store");
-    response.headers.set("X-Content-Type-Options", "nosniff");
-    if (origin) {
-      response.headers.set("Access-Control-Allow-Origin", origin);
-      response.headers.set("Vary", "Origin");
-      response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-      response.headers.set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
-    }
-    return response;
-  },
-};

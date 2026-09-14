@@ -7,7 +7,9 @@ export async function localWorker({ port, persist } = {}) {
   if (persist) await mkdir(persist, { recursive: true });
   const mf = new Miniflare({
     modules: true,
-    scriptPath: fileURLToPath(new URL("../package/template/worker/index.js", import.meta.url)),
+    scriptPath: fileURLToPath(
+      new URL("../packages/annoteer/template/worker/index.js", import.meta.url),
+    ),
     compatibilityDate: "2026-07-01",
     host: "127.0.0.1",
     ...(port ? { port } : {}),
@@ -20,7 +22,7 @@ export async function localWorker({ port, persist } = {}) {
   });
   const db = await mf.getD1Database("DB");
   const migration = await readFile(
-    new URL("../worker/migrations/0001_initial.sql", import.meta.url),
+    new URL("../packages/annoteer/infrastructure/migrations/0001_initial.sql", import.meta.url),
     "utf8",
   );
   for (const sql of migration.split(";").filter((part) => part.trim())) await db.prepare(sql).run();

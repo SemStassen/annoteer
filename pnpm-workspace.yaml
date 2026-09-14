@@ -1,6 +1,6 @@
 packages:
-  - package
-  - package/example
+  - apps/*
+  - packages/*
 onlyBuiltDependencies:
   - esbuild
   - workerd

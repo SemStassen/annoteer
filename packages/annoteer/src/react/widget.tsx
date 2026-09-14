@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { Anchor, Annotation, Session } from "../../shared/schema";
+import type { Anchor, Annotation, Session } from "../domain/schema";
 import { captureAnchor, isPrivate, resolveAnchor } from "./anchors";
 import { request } from "./api";
 import { styles } from "./styles";

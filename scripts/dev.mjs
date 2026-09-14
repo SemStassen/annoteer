@@ -45,8 +45,8 @@ const demoMiddleware = async (req, res) => {
   }
 };
 const server = await createServer({
-  root: fileURLToPath(new URL("../package/example", import.meta.url)),
-  configFile: fileURLToPath(new URL("../package/example/vite.config.ts", import.meta.url)),
+  root: fileURLToPath(new URL("../apps/playground", import.meta.url)),
+  configFile: fileURLToPath(new URL("../apps/playground/vite.config.ts", import.meta.url)),
   plugins: [
     {
       name: "annoteer-demo",
